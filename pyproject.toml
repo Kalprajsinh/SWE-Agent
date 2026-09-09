@@ -1,0 +1,5 @@
+[tool.watchfiles]
+# Exclude the workspace (cloned repos + node_modules) from uvicorn --reload
+ignore_paths = [
+    "workspace",
+]
