@@ -3,7 +3,8 @@ import re
 from typing import AsyncGenerator
 
 from agent import llm
-from agent.tools import TOOLS
+from agent.tools.registry import TOOLS
+from langsmith import traceable
 
 def _build_system_prompt(repo: str = "") -> str:
     tool_docs = []
@@ -86,7 +87,7 @@ def _parse_tool_call(text: str) -> dict | None:
     except json.JSONDecodeError:
         return None
 
-
+@traceable(run_type="tool")
 def _dispatch(tool_name: str, args: dict) -> str:
     if tool_name not in TOOLS:
         return f"Unknown tool: '{tool_name}'. Available tools: {', '.join(TOOLS.keys())}"
@@ -98,6 +99,7 @@ def _dispatch(tool_name: str, args: dict) -> str:
     except Exception as e:
         return f"Tool execution error: {e}"
 
+@traceable(run_type="chain")
 def run(user_message: str, repo: str = "", max_steps: int = 50) -> str:
     messages = [
         {"role": "system", "content": _build_system_prompt(repo)},
@@ -128,6 +130,7 @@ def run(user_message: str, repo: str = "", max_steps: int = 50) -> str:
 
     return "Max steps reached. The agent did not produce a final answer."
 
+@traceable(run_type="chain")
 async def stream_run(user_message: str, repo: str = "", max_steps: int = 35) -> AsyncGenerator[dict, None]:
     messages = [
         {"role": "system", "content": _build_system_prompt(repo)},

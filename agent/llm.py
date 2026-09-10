@@ -4,16 +4,15 @@ import threading
 import queue
 from typing import AsyncGenerator
 from openai import OpenAI
+from langsmith import traceable
 
 QWEN_API_KEY    = os.getenv("QWEN_API_KEY", "")
 QWEN_BASE_URL   = os.getenv("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1")
 QWEN_MODEL      = os.getenv("QWEN_MODEL", "qwen3.8-flash")
 ENABLE_THINKING = os.getenv("ENABLE_THINKING", "true").lower() == "true"
 
-
 def _client() -> OpenAI:
     return OpenAI(api_key=QWEN_API_KEY, base_url=QWEN_BASE_URL)
-
 
 def _messages_to_input(messages: list[dict]) -> str:
     parts = []
@@ -33,7 +32,6 @@ def _messages_to_input(messages: list[dict]) -> str:
         return f"{system_part}\n\n{conversation}\n\nAssistant:"
     return f"{conversation}\n\nAssistant:"
 
-
 def _extract_answer(response) -> str:
     for item in response.output:
         if item.type == "message":
@@ -43,6 +41,7 @@ def _extract_answer(response) -> str:
     return ""
 
 
+@traceable(run_type="llm")
 def chat(messages: list[dict], model: str | None = None) -> str:
     model = model or QWEN_MODEL
     input_text = _messages_to_input(messages)
@@ -55,6 +54,7 @@ def chat(messages: list[dict], model: str | None = None) -> str:
     return _extract_answer(response)
 
 
+@traceable(run_type="llm")
 async def stream_chat(messages: list[dict], model: str | None = None) -> AsyncGenerator[str, None]:
     model = model or QWEN_MODEL
     input_text = _messages_to_input(messages)
