@@ -1,4 +1,4 @@
-worksspace/
+workspace/
 .env
 __pycache__/
 __init__.py

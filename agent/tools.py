@@ -3,6 +3,7 @@ import subprocess
 import json
 import urllib.request
 import urllib.error
+import platform
 from pathlib import Path
 from typing import Optional
 
@@ -11,7 +12,15 @@ WORKSPACE_ROOT.mkdir(exist_ok=True)
 
 GITHUB_PAT = os.getenv("GITHUB_PAT", "")
 
-def _run_shell(cmd: str, cwd: Optional[str] = None, timeout: int = 300) -> str:
+def _normalize_cmd(cmd: str) -> str:
+    if platform.system() != "Windows":
+        return cmd
+    if cmd.strip().startswith("cat "):
+        return "type " + cmd.strip()[4:]
+    return cmd
+
+def _run_shell(cmd: str, cwd: Optional[str] = None, timeout: int = 600) -> str:
+    cmd = _normalize_cmd(cmd)
     try:
         result = subprocess.run(
             cmd,
@@ -21,9 +30,9 @@ def _run_shell(cmd: str, cwd: Optional[str] = None, timeout: int = 300) -> str:
             text=True,
             timeout=timeout,
         )
-        output = result.stdout
+        output = result.stdout or ""
         if result.stderr:
-            output += f"\n[stderr]\n{result.stderr}"
+            output += f"\n[stderr]\n{result.stderr or ''}"
         if result.returncode != 0:
             output = f"[exit code {result.returncode}]\n" + output
         return output.strip() or "(no output)"

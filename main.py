@@ -92,7 +92,6 @@ if __name__ == "__main__":
         "main:app",
         host="127.0.0.1",
         port=port,
-        reload=True,
-        reload_excludes=["workspace", "workspace/*", "workspace/**/*"],
+        reload=False,
         log_level="info",
     )
