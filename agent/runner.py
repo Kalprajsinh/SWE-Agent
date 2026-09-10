@@ -178,3 +178,69 @@ async def stream_run(user_message: str, repo: str = "", max_steps: int = 35) -> 
         messages.append({"role": "user", "content": tool_result_msg})
 
     yield {"type": "error", "data": "Max steps reached without a final answer."}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V2 — LangGraph entry points
+# ─────────────────────────────────────────────────────────────────────────────
+
+@traceable(run_type="chain")
+async def graph_stream_run(user_message: str, repo: str = "") -> AsyncGenerator[dict, None]:
+    """
+    V2: Runs the agent using the LangGraph graph.
+    Streams SSE-compatible dicts identical to stream_run() so the router/UI
+    don't need any changes.
+    """
+    from agent.graph.graph import agent_graph
+
+    initial_state = {
+        "messages": [
+            {"role": "system", "content": _build_system_prompt(repo)},
+            {"role": "user", "content": user_message},
+        ],
+        "task": user_message,
+        "repo": repo,
+        "steps": 0,
+        "final_answer": "",
+        "done": False,
+        "last_tool": "",
+    }
+
+    # Stream through every graph event
+    async for event in agent_graph.astream(initial_state, stream_mode="updates"):
+        for node_name, update in event.items():
+            msgs = update.get("messages", [])
+            for msg in msgs:
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+
+                if role == "assistant":
+                    # Stream assistant token-by-token
+                    chunk_size = 6
+                    for i in range(0, len(content), chunk_size):
+                        yield {"type": "token", "data": content[i:i + chunk_size]}
+
+                    # If the message contains a tool call, emit tool_call event
+                    tool_call = _parse_tool_call(content)
+                    if tool_call:
+                        yield {
+                            "type": "tool_call",
+                            "data": {
+                                "tool": tool_call.get("tool", ""),
+                                "args": tool_call.get("args", {}),
+                            },
+                        }
+
+                elif role == "user" and "<TOOL_RESULT>" in content:
+                    # Extract just the result content between tags
+                    result_text = content.replace("<TOOL_RESULT>", "").replace("</TOOL_RESULT>", "").strip()
+                    yield {"type": "tool_result", "data": result_text}
+
+            # Check if the graph is done
+            if update.get("done"):
+                yield {"type": "done", "data": ""}
+                return
+
+    # Fallback done if astream ends without explicit done flag
+    yield {"type": "done", "data": ""}
+

@@ -9,7 +9,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 async def _sse_generator(user_message: str, repo: str = ""):
-    async for event in runner.stream_run(user_message, repo=repo):
+    async for event in runner.graph_stream_run(user_message, repo=repo):
         payload = json.dumps(event)
         yield f"data: {payload}\n\n"
     yield "data: [DONE]\n\n"
