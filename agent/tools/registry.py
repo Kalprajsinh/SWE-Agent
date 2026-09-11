@@ -2,6 +2,7 @@ from agent.tools.filesystem import list_files, read_file, write_file
 from agent.tools.git import clone_repo
 from agent.tools.shell import run_command
 from agent.tools.github import create_pr
+from agent.tools.code_search import get_repository_map, get_symbol, find_references
 
 TOOLS = {
     "clone_repo": {
@@ -10,6 +11,30 @@ TOOLS = {
         "parameters": {
             "owner": "GitHub username or org name",
             "repo": "Repository name",
+        },
+    },
+    "get_repository_map": {
+        "fn": get_repository_map,
+        "description": "Get a structural map of all files and symbols (classes/functions) in the repository.",
+        "parameters": {
+            "repo": "Repository directory name (e.g. 'owner_repo')",
+        },
+    },
+    "get_symbol": {
+        "fn": get_symbol,
+        "description": "Retrieve the source code of a specific class or function instead of reading an entire file.",
+        "parameters": {
+            "repo": "Repository directory name",
+            "file_path": "Path to the file relative to repo root",
+            "symbol": "Name of the class or function",
+        },
+    },
+    "find_references": {
+        "fn": find_references,
+        "description": "Find usages of a specific function or class across the entire repository.",
+        "parameters": {
+            "repo": "Repository directory name",
+            "symbol_name": "Name of the symbol to search for",
         },
     },
     "list_files": {

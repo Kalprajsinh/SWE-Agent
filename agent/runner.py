@@ -38,8 +38,8 @@ After I execute the tool, I will give you the result wrapped in <TOOL_RESULT> ta
 
 ## Workflow for Coverage Tasks
 1. Clone the repo with `clone_repo`.
-2. Explore its structure using `list_files`.
-3. Read source files and existing tests with `read_file`.
+2. Get the structure of the repository and its symbols using `get_repository_map`.
+3. Extract specific functions and classes you need to test using `get_symbol`.
 4. Run the existing test suite with `run_command` to see current coverage.
 5. Write new test files with `write_file`.
 6. Verify the new tests pass with `run_command`.
@@ -54,19 +54,21 @@ CRITICAL RULES:
 3. NEVER call a tool that is not in the list above.
 
 EXAMPLE OF CORRECT BEHAVIOUR:
-User: List the files
+User: Understand the repo
 Assistant:
-I will list the files in the repository.
+I will map the repository to see its structure.
 <TOOL_CALL>
-{{"tool": "list_files", "args": {{"directory": "owner_repo"}}}}
+{{"tool": "get_repository_map", "args": {{"repo": "owner_repo"}}}}
 </TOOL_CALL>
 User: <TOOL_RESULT>
-📄 src/index.js
-📄 server.js
+[FILE] src/auth.py
+ |-- AuthService
+   |-- login()
+   |-- validate()
 </TOOL_RESULT>
-Assistant: I can see two files. Now I'll read index.js.
+Assistant: I can see the AuthService class. Now I'll read the login method.
 <TOOL_CALL>
-{{"tool": "read_file", "args": {{"file_path": "owner_repo/src/index.js"}}}}
+{{"tool": "get_symbol", "args": {{"repo": "owner_repo", "file_path": "src/auth.py", "symbol": "AuthService.login"}}}}
 </TOOL_CALL>"""
 
 HALLUCINATION_SIGNALS = ["I will call", "I will run", "Result:", "will now run", "Output:", "Resulting"]
@@ -87,110 +89,8 @@ def _parse_tool_call(text: str) -> dict | None:
     except json.JSONDecodeError:
         return None
 
-@traceable(run_type="tool")
-def _dispatch(tool_name: str, args: dict) -> str:
-    if tool_name not in TOOLS:
-        return f"Unknown tool: '{tool_name}'. Available tools: {', '.join(TOOLS.keys())}"
-    fn = TOOLS[tool_name]["fn"]
-    try:
-        return fn(**args)
-    except TypeError as e:
-        return f"Tool call error (wrong args?): {e}"
-    except Exception as e:
-        return f"Tool execution error: {e}"
-
-@traceable(run_type="chain")
-def run(user_message: str, repo: str = "", max_steps: int = 50) -> str:
-    messages = [
-        {"role": "system", "content": _build_system_prompt(repo)},
-        {"role": "user", "content": user_message},
-    ]
-
-    for step in range(max_steps):
-        response = llm.chat(messages)
-        messages.append({"role": "assistant", "content": response})
-
-        tool_call = _parse_tool_call(response)
-        if not tool_call:
-            if _is_hallucinating(response) and step < max_steps - 2:
-                messages.append({
-                    "role": "user",
-                    "content": "REMINDER: You must output a <TOOL_CALL> block to execute tools. Do not invent results. Please call a tool or provide your final answer."
-                })
-                continue
-            final = TOOL_CALL_PATTERN.sub("", response).strip()
-            return final
-
-        tool_name = tool_call.get("tool", "")
-        args = tool_call.get("args", {})
-        result = _dispatch(tool_name, args)
-
-        tool_result_msg = f"<TOOL_RESULT>\n{result}\n</TOOL_RESULT>"
-        messages.append({"role": "user", "content": tool_result_msg})
-
-    return "Max steps reached. The agent did not produce a final answer."
-
-@traceable(run_type="chain")
-async def stream_run(user_message: str, repo: str = "", max_steps: int = 35) -> AsyncGenerator[dict, None]:
-    messages = [
-        {"role": "system", "content": _build_system_prompt(repo)},
-        {"role": "user", "content": user_message},
-    ]
-
-    for step in range(max_steps):
-        full_response = ""
-        try:
-            async for token in llm.stream_chat(messages):
-                full_response += token
-                yield {"type": "token", "data": token}
-        except Exception as e:
-            yield {"type": "error", "data": f"LLM stream error: {e}"}
-            return
-
-        print(f"sended input {messages[-2]['content']}")
-        print(f"\n\033[96m--- [RAW AGENT RESPONSE | STEP {step}] ---\033[0m\n{full_response}\n\033[96m----------------------------------------\033[0m\n")
-
-        messages.append({"role": "assistant", "content": full_response})
-
-        tool_call = _parse_tool_call(full_response)
-        if not tool_call:
-            if _is_hallucinating(full_response) and step < max_steps - 2:
-                yield {"type": "token", "data": "\n\n*(System: Detected missing tool call. Re-prompting model...)*\n"}
-                messages.append({
-                    "role": "user",
-                    "content": "REMINDER: You must output a <TOOL_CALL> block to execute tools. Do not invent results. Please call a tool or provide your final answer."
-                })
-                continue
-            
-            yield {"type": "done", "data": ""}
-            return
-
-        tool_name = tool_call.get("tool", "")
-        args = tool_call.get("args", {})
-        yield {"type": "tool_call", "data": {"tool": tool_name, "args": args}}
-
-        result = _dispatch(tool_name, args)
-        yield {"type": "tool_result", "data": result}
-        
-        print(f"\n\033[93m--- [TOOL RESULT] ---\033[0m\n{result[:1000]}{'...' if len(result) > 1000 else ''}\n\033[93m---------------------\033[0m\n")
-
-        tool_result_msg = f"<TOOL_RESULT>\n{result}\n</TOOL_RESULT>"
-        messages.append({"role": "user", "content": tool_result_msg})
-
-    yield {"type": "error", "data": "Max steps reached without a final answer."}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# V2 — LangGraph entry points
-# ─────────────────────────────────────────────────────────────────────────────
-
 @traceable(run_type="chain")
 async def graph_stream_run(user_message: str, repo: str = "") -> AsyncGenerator[dict, None]:
-    """
-    V2: Runs the agent using the LangGraph graph.
-    Streams SSE-compatible dicts identical to stream_run() so the router/UI
-    don't need any changes.
-    """
     from agent.graph.graph import agent_graph
 
     initial_state = {
@@ -206,7 +106,6 @@ async def graph_stream_run(user_message: str, repo: str = "") -> AsyncGenerator[
         "last_tool": "",
     }
 
-    # Stream through every graph event
     async for event in agent_graph.astream(initial_state, stream_mode="updates"):
         for node_name, update in event.items():
             msgs = update.get("messages", [])
@@ -215,12 +114,11 @@ async def graph_stream_run(user_message: str, repo: str = "") -> AsyncGenerator[
                 content = msg.get("content", "")
 
                 if role == "assistant":
-                    # Stream assistant token-by-token
+                 
                     chunk_size = 6
                     for i in range(0, len(content), chunk_size):
                         yield {"type": "token", "data": content[i:i + chunk_size]}
 
-                    # If the message contains a tool call, emit tool_call event
                     tool_call = _parse_tool_call(content)
                     if tool_call:
                         yield {
@@ -230,17 +128,14 @@ async def graph_stream_run(user_message: str, repo: str = "") -> AsyncGenerator[
                                 "args": tool_call.get("args", {}),
                             },
                         }
-
                 elif role == "user" and "<TOOL_RESULT>" in content:
-                    # Extract just the result content between tags
+                   
                     result_text = content.replace("<TOOL_RESULT>", "").replace("</TOOL_RESULT>", "").strip()
                     yield {"type": "tool_result", "data": result_text}
-
-            # Check if the graph is done
+                    
             if update.get("done"):
                 yield {"type": "done", "data": ""}
                 return
 
-    # Fallback done if astream ends without explicit done flag
     yield {"type": "done", "data": ""}
 
