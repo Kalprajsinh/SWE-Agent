@@ -31,3 +31,23 @@ def build_repository_map(repo_dir: str) -> dict:
                 repo_map[rel_path] = []  
                     
     return repo_map
+
+
+def get_repository_map_formatted(repo_dir: str) -> str:
+
+    repo_map = build_repository_map(repo_dir)
+    lines = []
+    
+    for file, symbols in repo_map.items():
+        lines.append(f"[FILE] {file}")
+        for sym in symbols:
+            if "." in sym:
+                
+                lines.append(f"   |-- {sym.split('.')[-1]}()")
+            else:
+                lines.append(f" |-- {sym}")
+    
+    if not lines:
+        return "No parsed files or symbols found in this repository."
+        
+    return "\n".join(lines)
