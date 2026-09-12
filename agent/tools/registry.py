@@ -2,7 +2,7 @@ from agent.tools.filesystem import list_files, read_file, write_file
 from agent.tools.git import clone_repo
 from agent.tools.shell import run_command
 from agent.tools.github import create_pr
-from agent.tools.code_search import get_repository_map, get_symbol, find_references
+from agent.tools.code_search import get_repository_map, get_symbol, find_references, search_codebase, index_codebase
 
 TOOLS = {
     "clone_repo": {
@@ -11,6 +11,21 @@ TOOLS = {
         "parameters": {
             "owner": "GitHub username or org name",
             "repo": "Repository name",
+        },
+    },
+    "index_codebase": {
+        "fn": index_codebase,
+        "description": "Index the codebase into the Vector Database to enable semantic search. Run this once after cloning a large repo.",
+        "parameters": {
+            "repo": "Repository directory name",
+        },
+    },
+    "search_codebase": {
+        "fn": search_codebase,
+        "description": "Semantic search for conceptual matches (e.g. 'auth logic', 'database connection') across the codebase.",
+        "parameters": {
+            "repo": "Repository directory name",
+            "query": "Semantic query describing the code you are looking for",
         },
     },
     "get_repository_map": {

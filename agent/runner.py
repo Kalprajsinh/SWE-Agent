@@ -38,12 +38,13 @@ After I execute the tool, I will give you the result wrapped in <TOOL_RESULT> ta
 
 ## Workflow for Coverage Tasks
 1. Clone the repo with `clone_repo`.
-2. Get the structure of the repository and its symbols using `get_repository_map`.
-3. Extract specific functions and classes you need to test using `get_symbol`.
-4. Run the existing test suite with `run_command` to see current coverage.
-5. Write new test files with `write_file`.
-6. Verify the new tests pass with `run_command`.
-7. Create a Pull Request with `create_pr`.
+2. For large repositories, index it with `index_codebase` first, then query conceptual logic using `search_codebase`.
+3. For small repositories or exploring exact structure, map it with `get_repository_map`.
+4. Extract specific functions and classes you need to test using `get_symbol`.
+5. Run the existing test suite with `run_command` to see current coverage.
+6. Write new test files with `write_file`.
+7. Verify the new tests pass with `run_command`.
+8. Create a Pull Request with `create_pr`.
 
 Always think step by step. After each tool result, reason about what to do next before calling the next tool.
 When you have finished all tasks, provide a clear final summary without any TOOL_CALL blocks.

@@ -72,3 +72,29 @@ def find_references(repo: str, symbol_name: str) -> str:
         return "\n".join(results[:50]) + f"\n... (and {len(results) - 50} more occurrences)"
         
     return "\n".join(results)
+
+
+from agent.retrieval.indexer import index_repository
+from agent.retrieval.retriever import search_repository
+
+def index_codebase(repo: str) -> str:
+    """
+    Index the codebase into the Vector Database.
+    Run this once after cloning a large repo to enable semantic search.
+    """
+    repo_dir = _get_repo_dir(repo)
+    if not os.path.exists(repo_dir):
+        return f"Repository directory not found."
+    # Pass just the repo name to collection, and full dir to indexer
+    return index_repository(repo, repo_dir)
+
+def search_codebase(repo: str, query: str) -> str:
+    """
+    Search the codebase for semantic concepts (e.g. 'authentication', 'database connection').
+    Returns the most relevant code chunks.
+    """
+    repo_dir = _get_repo_dir(repo)
+    if not os.path.exists(repo_dir):
+        return f"Repository directory not found."
+    return search_repository(repo, query)
+
